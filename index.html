@@ -363,7 +363,9 @@ body {
   transition: all 0.2s;
 }
 .mode-btn.learn { background: rgba(255,255,255,0.3); color: #fff; }
+.mode-btn.learn.active { background: rgba(255,255,255,0.5); border: 2px solid #ffe66d; }
 .mode-btn.practice { background: rgba(255,230,109,0.8); color: #333; font-weight: bold; }
+.mode-btn.practice.active { background: #ffe66d; box-shadow: 0 0 10px rgba(255,230,109,0.5); }
 
 /* 响应式 */
 @media (orientation: landscape) {
@@ -577,7 +579,7 @@ const state = {
   // 找规律
   patAnswer: null,
   // 迷宫
-  mazeCells: [],
+  mazeGrid: [],
   mazeTarget: 0,
   mazeFoundCount: 0,
   mazeCorrectTotal: 0,
@@ -612,9 +614,7 @@ function saveStats() {
 
 function addScore(game, pts) {
   state.stats[game] = (state.stats[game] || 0) + pts;
-  state.stats.total = Object.values(state.stats).reduce((a, b) => a + b, 0) - state.stats.total + state.stats.total;
-  // recalc total
-  state.stats.total = state.stats.add + state.stats.sub + state.stats.mul + state.stats.pat + state.stats.maze;
+  state.stats.total = (state.stats.add || 0) + (state.stats.sub || 0) + (state.stats.mul || 0) + (state.stats.pat || 0) + (state.stats.maze || 0);
   saveStats();
 }
 
@@ -662,6 +662,7 @@ function stopTimer() {
 // ===== 反馈动画 =====
 function showFeedback(correct) {
   const el = $(correct ? 'fb-correct' : 'fb-wrong');
+  if (!el) return;  // 迷宫模块没有全屏反馈，跳过
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 600);
 }
@@ -910,12 +911,12 @@ const chMul = [
 
 function setMulMode(mode) {
   state.mulMode = mode;
-  $('mul-mode-learn').className = 'mode-btn ' + (mode === 'learn' ? 'practice' : 'learn');
-  $('mul-mode-practice').className = 'mode-btn ' + (mode === 'practice' ? 'practice' : 'learn');
+  $('mul-mode-learn').className = 'mode-btn ' + (mode === 'learn' ? 'learn active' : 'learn');
+  $('mul-mode-practice').className = 'mode-btn ' + (mode === 'practice' ? 'practice active' : 'practice');
   $('mul-learn-view').style.display = mode === 'learn' ? 'block' : 'none';
   $('mul-practice-view').style.display = mode === 'practice' ? 'block' : 'none';
   if (mode === 'learn') { buildTimesGrid(); showMulTableRow(0); }
-  else { nextMulQuestion(); }
+  else { state.mulAnswered = 0; state.mulTotalQuestions = 10; nextMulQuestion(); }
 }
 
 function buildTimesGrid() {
@@ -974,8 +975,6 @@ function nextMulTable() {
   let idx = state.mulTableIndex + 1;
   if (idx >= 81) idx = 0;
   showMulTableRow(idx);
-  state.score += 1;
-  $('mul-score').textContent = state.score;
 }
 
 function nextMulQuestion() {
@@ -1053,7 +1052,7 @@ function nextPatQuestion() {
       const seq = [1];
       for (let i = 1; i < 5; i++) seq.push(seq[i-1] * base);
       // cap at 100
-      if (seq[4] > 100) return nextPatQuestion.call(this); // retry
+      if (seq[4] > 100) return null;
       const missIdx = rand(1, 4);
       const answer = seq[missIdx];
       seq[missIdx] = '?';
@@ -1078,7 +1077,7 @@ function nextPatQuestion() {
       const b = rand(1, 5);
       const seq = [a, b];
       for (let i = 2; i < 5; i++) seq.push(seq[i-1] + seq[i-2]);
-      if (seq[4] > 99) return nextPatQuestion.call(this);
+      if (seq[4] > 99) return null;
       const missIdx = rand(2, 4);
       const answer = seq[missIdx];
       seq[missIdx] = '?';
@@ -1094,8 +1093,20 @@ function nextPatQuestion() {
     }
   ];
   
-  const patternFn = patterns[rand(0, patterns.length - 1)];
-  const result = patternFn();
+  let result;
+  let attempts = 0;
+  do {
+    const patternFn = patterns[rand(0, patterns.length - 1)];
+    result = patternFn();
+    attempts++;
+  } while (!result && attempts < 20);
+  if (!result) {
+    // fallback: simple arithmetic sequence
+    const step = rand(1, 5);
+    const start = rand(1, 10);
+    const seq = [start, start + step, start + step * 2, start + step * 3, '?'];
+    result = { seq, answer: start + step * 4, hint: '每个数增加相同的数' };
+  }
   state.patAnswer = result.answer;
   
   $('pat-hint').textContent = result.hint;
@@ -1148,7 +1159,11 @@ function checkPatAnswer(chosen, answer, btn) {
 // 数学迷宫
 // =====================================================
 function initMaze() {
-  state.mazeSelected = [];
+  // 移除之前的弹窗
+  dismissPopup();
+  
+  state.mazeFoundCount = 0;
+  state.mazeCorrectTotal = 0;
   $('maze-score').textContent = '0';
   
   // 生成一道计算题
