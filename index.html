@@ -152,23 +152,81 @@ body {
 
 /* ===== 乘法表页面 ===== */
 .times-grid {
-  display: grid; grid-template-columns: repeat(9, 1fr);
-  gap: 4px; width: 95%; max-width: 700px; margin: 10px 0;
+  display: grid; grid-template-columns: repeat(10, 1fr);
+  gap: 3px; width: 100%; margin: 0 auto;
+  min-width: 0;
 }
 .times-cell {
-  aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
-  background: rgba(255,255,255,0.9); border-radius: 8px;
-  font-size: clamp(12px, 1.8vw, 20px); font-weight: bold;
-  color: #333;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border-radius: 6px;
+  font-size: clamp(11px, 1.6vw, 18px); font-weight: bold;
+  color: #333; transition: all 0.2s;
+  user-select: none;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: visible;
+  cursor: pointer;
+  padding: 2px;
 }
-.times-cell.header { background: rgba(255,230,109,0.9); color: #5a3e2b; }
-.times-cell.highlight { background: #f5576c; color: #fff; transform: scale(1.1); }
+.times-cell.header {
+  background: linear-gradient(135deg, #ffe66d, #f5a623);
+  color: #fff; font-size: clamp(13px, 2vw, 22px);
+  font-weight: 900;
+}
+.times-cell.highlight {
+  background: #f5576c; color: #fff;
+  box-shadow: 0 0 0 3px #fff, 0 0 10px rgba(245,87,108,0.5);
+  border-radius: 8px;
+}
 .times-cell.correct-flash { background: #43e97b; color: #fff; }
 .times-cell.wrong-flash { background: #f5576c; color: #fff; }
 .times-table-container {
   background: rgba(255,255,255,0.15); border-radius: 20px;
-  padding: 8px; width: 95%; max-width: 720px;
-  margin-bottom: 5px;
+  padding: 10px; width: 92%; max-width: 680px;
+  margin-bottom: 8px;
+  max-height: calc(100vh - 260px);
+  overflow: auto;
+}
+
+/* ===== 乘法学习模式专用样式 ===== */
+.mul-current-row {
+  background: rgba(255,255,255,0.95); border-radius: 25px;
+  padding: 18px 24px; text-align: center;
+  width: 95%; max-width: 520px; margin: 6px auto;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+}
+.mul-big-eq {
+  font-size: clamp(28px, 5.5vw, 48px); color: #333;
+  font-weight: bold; margin-bottom: 4px;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.mul-chinese {
+  font-size: clamp(22px, 4vw, 32px); color: #f5576c;
+  font-weight: bold; letter-spacing: 3px;
+  white-space: nowrap;
+  line-height: 1.3;
+}
+.mul-progress-text {
+  font-size: clamp(13px, 1.8vw, 16px); color: rgba(255,255,255,0.7);
+  text-align: center; margin: 4px 0 6px 0;
+}
+.mul-nav-btns {
+  display: flex; gap: 10px; justify-content: center;
+  margin: 6px auto 0 auto; width: 95%; max-width: 440px;
+}
+.mul-nav-btns .result-btn {
+  flex: 1; padding: 12px 16px; border: none; border-radius: 18px;
+  font-size: clamp(16px, 2.8vw, 22px); font-weight: bold;
+  color: #fff; cursor: pointer; transition: all 0.2s;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+}
+.mul-nav-btns .result-btn:active { transform: scale(0.93); }
+.mul-nav-btns .retry-btn:first-child {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+}
+.mul-nav-btns .retry-btn:last-child {
+  background: linear-gradient(135deg, #43e97b, #38f9d7);
 }
 .times-practice {
   background: rgba(255,255,255,0.95); border-radius: 25px;
@@ -465,14 +523,22 @@ body {
   </div>
   <!-- 学习模式：乘法表 -->
   <div id="mul-learn-view">
-    <div class="question-area" style="margin-bottom:10px;">
-      <div class="question-text" id="mul-table-q" style="font-size:clamp(32px,5vw,52px);">1 × 1 = 1</div>
-      <div class="question-hint" id="mul-table-text">一一得一</div>
+    <!-- 当前口诀展示区 -->
+    <div class="mul-current-row" id="mul-current-row">
+      <div class="mul-big-eq" id="mul-table-q">1 × 1 = 1</div>
+      <div class="mul-chinese" id="mul-table-text">一一得一</div>
     </div>
+    <!-- 口诀进度指示 -->
+    <div class="mul-progress-text" id="mul-progress-text">第 1 / 81 句</div>
+    <!-- 9x9 乘法表 -->
     <div class="times-table-container">
       <div class="times-grid" id="times-grid"></div>
     </div>
-    <button class="result-btn retry-btn" style="margin-top:15px;" onclick="nextMulTable()">下一句 ➡️</button>
+    <!-- 导航按钮 -->
+    <div class="mul-nav-btns">
+      <button class="result-btn retry-btn" onclick="prevMulTable()">⬅️ 上一句</button>
+      <button class="result-btn retry-btn" onclick="nextMulTable()">下一句 ➡️</button>
+    </div>
   </div>
   <!-- 练习模式 -->
   <div id="mul-practice-view" style="display:none;">
@@ -909,6 +975,20 @@ const chMul = [
   '九九八十一'
 ];
 
+// 行号×列号 → 中文口诀映射（支持双向查找，如 2×3 和 3×2 都返回"二三得六"）
+const chMulMap = {};
+for (let r = 1; r <= 9; r++) {
+  for (let c = 1; c <= 9; c++) {
+    const ri = Math.min(r, c);
+    const ci = Math.max(r, c);
+    // 前 ri-1 行的格子总数 = (9-1+9) + (9-2+9) + ... + (9-(ri-1)+9)
+    // = 9*(ri-1) - (0+1+...+(ri-2)) = 9*(ri-1) - (ri-1)*(ri-2)/2
+    const startIdx = 9 * (ri - 1) - (ri - 1) * (ri - 2) / 2;
+    const ciOffset = ci - ri;
+    chMulMap[r + '-' + c] = chMul[startIdx + ciOffset];
+  }
+}
+
 function setMulMode(mode) {
   state.mulMode = mode;
   $('mul-mode-learn').className = 'mode-btn ' + (mode === 'learn' ? 'learn active' : 'learn');
@@ -949,6 +1029,17 @@ function buildTimesGrid() {
       grid.appendChild(cell);
     }
   }
+  // 动态计算格子大小，确保 10x10 正方形格子不溢出容器
+  requestAnimationFrame(() => {
+    const container = grid.parentElement;
+    if (!container) return;
+    const containerWidth = container.clientWidth - 20; // 减去 padding
+    // 10列 + 9个gap = 实际可用宽度要减去gap
+    const availableWidth = containerWidth - 9 * 3;
+    const cellSize = Math.floor(availableWidth / 10);
+    const totalHeight = cellSize * 10 + 9 * 3; // 10 cells + 9 gaps
+    grid.style.height = totalHeight + 'px';
+  });
 }
 
 function highlightMulCell(r, c) {
@@ -960,6 +1051,14 @@ function highlightMulCell(r, c) {
       cell.classList.add('highlight');
     }
   });
+  // 显示对应口诀
+  const phrase = chMulMap[r + '-' + c];
+  if (phrase) {
+    $('mul-table-q').textContent = r + ' × ' + c + ' = ' + (r * c);
+    $('mul-table-text').textContent = phrase;
+    $('mul-progress-text').textContent = '第 ' + ((r - 1) * 9 + c) + ' / 81 句';
+    state.mulTableIndex = (r - 1) * 9 + (c - 1);
+  }
 }
 
 function showMulTableRow(idx) {
@@ -967,8 +1066,15 @@ function showMulTableRow(idx) {
   const c = (idx % 9) + 1;
   $('mul-table-q').textContent = r + ' × ' + c + ' = ' + (r * c);
   $('mul-table-text').textContent = chMul[idx];
+  $('mul-progress-text').textContent = '第 ' + (idx + 1) + ' / 81 句';
   highlightMulCell(r, c);
   state.mulTableIndex = idx;
+}
+
+function prevMulTable() {
+  let idx = state.mulTableIndex - 1;
+  if (idx < 0) idx = 80;
+  showMulTableRow(idx);
 }
 
 function nextMulTable() {
